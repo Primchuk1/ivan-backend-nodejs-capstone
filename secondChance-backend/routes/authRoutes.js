@@ -4,6 +4,9 @@ const connectToDatabase = require('../models/db');
 const logger = require('../logger');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const dotenv = require('dotenv');
+const pino = require('pino');  // Import Pino logger
+dotenv.config();
 
 router.post('/register', async (req, res) => {
     try {
@@ -50,6 +53,38 @@ router.post('/register', async (req, res) => {
 
     } catch (e) {
         return res.status(500).send('Internal server error');
+    }
+});
+
+router.post('/login', async (req, res) => {
+    try {
+        const db = await connectToDatabase();
+        const collection = db.collection("users");
+        const { email, password } = req.body;
+        const user = await collection.findOne({ email: email });
+
+        if (!user) {
+            logger.error('User not found');
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const isPasswordValid = await bcrypt.compare(password, user.password);
+
+        if (!isPasswordValid) {
+            logger.error('Invalid password');
+            return res.status(400).json({ error: 'Invalid password' });
+        }
+
+        const userName = user.firstName;
+        const userEmail = user.email;
+
+        const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+
+        res.json({ token, userName, userEmail });
+    } catch (e) {
+        return res.status(500).send('Internal server error');
+
     }
 });
 
